@@ -40,15 +40,20 @@ import * as Sound from "./sound.js";
   ];
 
   // Probabilidad base de ascender de cada etapa a la siguiente, por tick.
-  // La etapa 2->3 (abiogénesis: el salto a la VIDA) es deliberadamente rara,
-  // y los saltos a la inteligencia (5->6) e interplanetaria (6->7) aún más.
-  const BASE_RISE = [0.0030, 0.0100, 0.0040, 0.0055, 0.0026, 0.0010, 0.0005];
+  // La etapa 2->3 (abiogénesis) NO usa este valor: se trata aparte abajo
+  // con ABIO_SPARK/COLONIZE, para que el ORIGEN de la vida sea muy lento
+  // (como en la Tierra) pero su expansión, una vez surge, sea rápida.
+  const BASE_RISE = [0.0030, 0.0100, 0, 0.0055, 0.0026, 0.0010, 0.0005];
   const NEED_MAT  = [0.12,   0.20,   0.30,   0.30,   0.45,   0.65,   0.82]; // material mínimo
   const COST_MAT  = [0.04,   0.06,   0.10,   0.10,   0.12,   0.14,   0.16]; // material gastado
   // Probabilidad de colapso (retroceso) por etapa: la vida compleja es más
   // frágil y las civilizaciones suben y caen (guerras, crisis), lo que
   // mantiene un planeta diverso y la inteligencia como un logro especial.
   const COLLAPSE  = [0, 0, 0, 0, 0.0030, 0.0110, 0.0160, 0.0300];
+
+  // Abiogénesis: origen de la vida a partir de la sopa de moléculas.
+  const ABIO_SPARK = 1.2e-7; // chispazo espontáneo (rarísimo, sobre todo en agua)
+  const COLONIZE   = 0.018;  // la vida coloniza la sopa cuando ya hay vida cerca
 
   const MAT_REGEN   = 0.006;   // material que genera el entorno por tick
   const BIO_REGEN   = 0.044;   // material que la vida cercana recicla/produce
@@ -460,8 +465,8 @@ import * as Sound from "./sound.js";
     }
     el.toggle.textContent = "▶ Iniciar";
     el.hint.classList.remove("hidden");
-    showFact("Mundo «" + planet.name + "» generado. Pulsa «Iniciar» para encender su química " +
-      "y ver si la vida logra abrirse camino.", false);
+    showFact("Mundo «" + planet.name + "» generado. Pulsa «Iniciar»: la sopa primordial tardará " +
+      "cientos de millones de años en dar vida (antes en mundos con agua). Ten paciencia… o sube la velocidad.", false);
     updateClock();
     updateLegend();
   }
@@ -551,9 +556,22 @@ import * as Sound from "./sound.js";
         // Ascenso evolutivo.
         if (ns === s && s < STAGES.length - 1 && m >= NEED_MAT[s]) {
           const support = livingNeighbors / 8;
-          let p = BASE_RISE[s] * planet.riseMult * (0.3 + m) * (1 + NEIGHBOR_BOOST * support);
-          if (maxNeighbor > s) p *= 1.6;
-          if (isWater[i]) p *= 1.12; else p *= 0.94; // la vida prospera en el agua
+          let p;
+          if (s === 2) {
+            // Abiogénesis: el gran salto de molécula a VIDA.
+            if (maxNeighbor >= 3) {
+              // Ya hay vida al lado: coloniza la sopa con rapidez.
+              p = COLONIZE * planet.riseMult * (0.3 + m) * (1 + NEIGHBOR_BOOST * support);
+            } else {
+              // Origen espontáneo: rarísimo y, sobre todo, en el agua.
+              // Puede tardar cientos de millones de años, como en la Tierra.
+              p = ABIO_SPARK * planet.riseMult * (0.3 + m) * (isWater[i] ? 1.6 : 0.25);
+            }
+          } else {
+            p = BASE_RISE[s] * planet.riseMult * (0.3 + m) * (1 + NEIGHBOR_BOOST * support);
+            if (maxNeighbor > s) p *= 1.6;
+            p *= isWater[i] ? 1.12 : 0.94; // la vida prospera en el agua
+          }
           if (Math.random() < p) { ns = s + 1; m -= COST_MAT[s]; if (m < 0) m = 0; }
         }
 
