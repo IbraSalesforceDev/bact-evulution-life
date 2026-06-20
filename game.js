@@ -34,16 +34,20 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     { name: "Vida unicelular",    color: [95, 211, 95]  }, // 3  primeras células
     { name: "Vida pluricelular",  color: [200, 232, 90] }, // 4  organismos complejos
     { name: "Vida compleja",      color: [244, 167, 66] }, // 5  ecosistemas avanzados
+    { name: "Vida inteligente",   color: [232, 110, 190] }, // 6  civilizaciones
+    { name: "Vida interplanetaria", color: [130, 226, 255] }, // 7  viajan entre mundos
   ];
 
   // Probabilidad base de ascender de cada etapa a la siguiente, por tick.
-  // La etapa 2->3 (abiogénesis: el salto a la VIDA) es deliberadamente rara.
-  const BASE_RISE = [0.0030, 0.0100, 0.0040, 0.0055, 0.0026];
-  const NEED_MAT  = [0.12,   0.20,   0.30,   0.30,   0.45]; // material mínimo
-  const COST_MAT  = [0.04,   0.06,   0.10,   0.10,   0.12]; // material gastado
+  // La etapa 2->3 (abiogénesis: el salto a la VIDA) es deliberadamente rara,
+  // y los saltos a la inteligencia (5->6) e interplanetaria (6->7) aún más.
+  const BASE_RISE = [0.0030, 0.0100, 0.0040, 0.0055, 0.0026, 0.0010, 0.0005];
+  const NEED_MAT  = [0.12,   0.20,   0.30,   0.30,   0.45,   0.65,   0.82]; // material mínimo
+  const COST_MAT  = [0.04,   0.06,   0.10,   0.10,   0.12,   0.14,   0.16]; // material gastado
   // Probabilidad de colapso (retroceso) por etapa: la vida compleja es más
-  // frágil y sufre crisis ecológicas, lo que mantiene un planeta diverso.
-  const COLLAPSE  = [0,      0,      0,      0,      0.0030, 0.0080];
+  // frágil y las civilizaciones suben y caen (guerras, crisis), lo que
+  // mantiene un planeta diverso y la inteligencia como un logro especial.
+  const COLLAPSE  = [0, 0, 0, 0, 0.0030, 0.0110, 0.0160, 0.0300];
 
   const MAT_REGEN   = 0.006;   // material que genera el entorno por tick
   const BIO_REGEN   = 0.044;   // material que la vida cercana recicla/produce
@@ -52,11 +56,20 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
   const UPKEEP      = 0.010;   // material que consume la vida por tick y etapa
   const NEIGHBOR_BOOST = 4.0;  // cuánto ayudan las vecinas vivas a ascender
 
+  // Coste de mantenimiento por etapa. Las etapas muy avanzadas son más
+  // eficientes (no crece sin límite), para que puedan llegar a sostenerse.
+  function upkeepFactor(s) { return s <= 4 ? s : 4 + (s - 4) * 0.5; }
+
   // ---------------------------------------------------------------- Estado
   let stage   = new Uint8Array(CELLS);
   let stageN  = new Uint8Array(CELLS);
   let mat     = new Float32Array(CELLS);
   let matN    = new Float32Array(CELLS);
+
+  // Relieve del planeta: elevación por celda (0..1) y máscara de agua.
+  let elevation = new Float32Array(CELLS);
+  let isWater   = new Uint8Array(CELLS);
+  let seaLevel  = 0.4;
 
   let years = 0;
   let running = false;
@@ -92,19 +105,67 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     const bombardment = 0.40 + Math.random() * 1.40; // 0.40 .. 1.80
     const ocean = OCEAN[(Math.random() * OCEAN.length) | 0];
 
+    // El agua es rara: la mayoría de mundos son áridos y con relieve;
+    // de vez en cuando aparece un mundo oceánico.
+    const oceanic = Math.random() < 0.25;
+    const waterFrac = oceanic ? 0.55 + Math.random() * 0.30   // mundo de agua
+                              : 0.05 + Math.random() * 0.40;  // mundo árido
+
     const name = PLANET_PREFIX[(Math.random() * PLANET_PREFIX.length) | 0] +
       "-" + (100 + ((Math.random() * 899) | 0)) + " " +
       PLANET_SUFFIX[(Math.random() * PLANET_SUFFIX.length) | 0];
 
-    // Puntuación de habitabilidad -> etiqueta de dificultad.
-    const score = richness + riseMult - (bombardment - 1) * 0.6;
+    // El agua favorece el origen de la vida; el relieve aporta variedad.
+    const score = richness + riseMult - (bombardment - 1) * 0.6 + (waterFrac - 0.3) * 0.5;
     let diff, diffClass;
     if (score >= 2.55)      { diff = "Paraíso fértil"; diffClass = "easy"; }
     else if (score >= 2.10) { diff = "Templado";       diffClass = "ok"; }
     else if (score >= 1.65) { diff = "Áspero";         diffClass = "hard"; }
     else                    { diff = "Hostil";         diffClass = "hostile"; }
 
-    return { name, richness, riseMult, bombardment, ocean, diff, diffClass };
+    return { name, richness, riseMult, bombardment, ocean, waterFrac, oceanic, diff, diffClass };
+  }
+
+  // Genera un relieve orgánico: ruido aleatorio suavizado en continentes,
+  // con envoltura horizontal para que no haya costura, y fija el nivel del mar
+  // según la cantidad de agua del planeta.
+  function generateTerrain() {
+    let a = elevation;
+    let b = new Float32Array(CELLS);
+    for (let i = 0; i < CELLS; i++) a[i] = Math.random();
+
+    // Varias pasadas de suavizado (box-blur 3x3) -> masas continentales.
+    for (let pass = 0; pass < 7; pass++) {
+      for (let y = 0; y < SIZE; y++) {
+        for (let x = 0; x < SIZE; x++) {
+          let sum = 0, cnt = 0;
+          for (let dy = -1; dy <= 1; dy++) {
+            const ny = y + dy;
+            if (ny < 0 || ny >= SIZE) continue;
+            for (let dx = -1; dx <= 1; dx++) {
+              const nx = (x + dx + SIZE) % SIZE;
+              sum += a[ny * SIZE + nx]; cnt++;
+            }
+          }
+          b[y * SIZE + x] = sum / cnt;
+        }
+      }
+      const t = a; a = b; b = t;
+    }
+
+    // Normaliza a 0..1.
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < CELLS; i++) { if (a[i] < lo) lo = a[i]; if (a[i] > hi) hi = a[i]; }
+    const inv = hi > lo ? 1 / (hi - lo) : 1;
+    for (let i = 0; i < CELLS; i++) a[i] = (a[i] - lo) * inv;
+    elevation = a;
+
+    // Nivel del mar = cuantil que deja bajo el agua la fracción deseada.
+    const sorted = Float32Array.from(elevation).sort();
+    seaLevel = sorted[Math.min(CELLS - 1, Math.floor(planet.waterFrac * CELLS))];
+
+    for (let i = 0; i < CELLS; i++) isWater[i] = elevation[i] < seaLevel ? 1 : 0;
+    buildElevationTexture();
   }
 
   // ---------------------------------------------------------------- DOM
@@ -118,6 +179,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     eventsVal: document.getElementById("eventsVal"),
     meteor: document.getElementById("meteor"),
     volcano: document.getElementById("volcano"),
+    cataclysm: document.getElementById("cataclysm"),
+    flash: document.getElementById("flash"),
     legend: document.getElementById("legend"),
     log: document.getElementById("log"),
     hint: document.getElementById("hint"),
@@ -143,6 +206,10 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
         "células se especializaran en tejidos y órganos.",
     m5: "Hace unos 540 millones de años, la «explosión cámbrica» multiplicó la diversidad " +
         "animal en apenas unos millones de años.",
+    m6: "¡Surge la inteligencia! Con herramientas, lenguaje y cultura (como la Edad del Bronce), " +
+        "una especie puede transformar su mundo como ninguna otra.",
+    m7: "¡Vida interplanetaria! Una civilización capaz de viajar entre mundos podría sembrar la " +
+        "vida más allá de su planeta natal. Así, quizá, empezó todo en otro lugar…",
   };
   const GENERAL_FACTS = [
     "Las cianobacterias inventaron la fotosíntesis y llenaron el aire de oxígeno: la «Gran " +
@@ -181,13 +248,37 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
   }
 
   // ============================================================ ESCENA 3D
-  let renderer, scene, camera, controls, planetMesh, texture, atmosphere;
+  let renderer, scene, camera, controls, planetMesh, texture, atmosphere, dispTexture;
   const buf = document.createElement("canvas");
   buf.width = SIZE; buf.height = SIZE;
   const bctx = buf.getContext("2d");
   const img = bctx.createImageData(SIZE, SIZE);
+
+  // Canvas de elevación (escala de grises) usado como mapa de relieve 3D.
+  const elevCanvas = document.createElement("canvas");
+  elevCanvas.width = SIZE; elevCanvas.height = SIZE;
+  const elevCtx = elevCanvas.getContext("2d");
+  const elevImg = elevCtx.createImageData(SIZE, SIZE);
+
   const raycaster = new THREE.Raycaster();
   const pointer = new THREE.Vector2();
+
+  // Efecto de sacudida de cámara para grandes cataclismos.
+  let shakeUntil = 0, shakeMag = 0, shakeDur = 1;
+
+  function buildElevationTexture() {
+    const d = elevImg.data;
+    for (let i = 0; i < CELLS; i++) {
+      // Solo la tierra emergida sobresale; el fondo marino queda plano.
+      let h = 0;
+      if (!isWater[i]) h = (elevation[i] - seaLevel) / Math.max(0.001, 1 - seaLevel);
+      const v = Math.max(0, Math.min(1, h)) * 255;
+      const p = i * 4;
+      d[p] = d[p + 1] = d[p + 2] = v; d[p + 3] = 255;
+    }
+    elevCtx.putImageData(elevImg, 0, 0);
+    if (dispTexture) dispTexture.needsUpdate = true;
+  }
 
   function initScene() {
     const w = el.scene.clientWidth || 600;
@@ -219,7 +310,10 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     texture.minFilter = THREE.LinearFilter;
     texture.magFilter = THREE.LinearFilter;
 
-    const geo = new THREE.SphereGeometry(1, 96, 64);
+    dispTexture = new THREE.CanvasTexture(elevCanvas);
+    dispTexture.colorSpace = THREE.NoColorSpace;
+
+    const geo = new THREE.SphereGeometry(1, 192, 128);
     const mat3d = new THREE.MeshStandardMaterial({
       map: texture,
       roughness: 1,
@@ -227,6 +321,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       emissive: 0xffffff,
       emissiveMap: texture,      // la vida brilla débilmente en la cara nocturna
       emissiveIntensity: 0.28,
+      displacementMap: dispTexture,  // relieve 3D real (montañas)
+      displacementScale: 0.06,
     });
     planetMesh = new THREE.Mesh(geo, mat3d);
     scene.add(planetMesh);
@@ -309,6 +405,20 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     requestAnimationFrame(animate);
     controls.update();
 
+    // Sacudida de cámara en grandes cataclismos.
+    if (planetMesh) {
+      const t = now || 0;
+      if (t < shakeUntil) {
+        const frac = (shakeUntil - t) / shakeDur;
+        const off = shakeMag * frac;
+        planetMesh.position.set((Math.random() - 0.5) * off, (Math.random() - 0.5) * off, 0);
+        atmosphere.position.copy(planetMesh.position);
+      } else if (planetMesh.position.lengthSq() > 0) {
+        planetMesh.position.set(0, 0, 0);
+        atmosphere.position.set(0, 0, 0);
+      }
+    }
+
     if (running) {
       if (!lastTime) lastTime = now;
       const dt = (now - lastTime) / 1000;
@@ -336,12 +446,14 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     el.log.innerHTML = "";
 
     planet = generatePlanet();
+    generateTerrain();
     showPlanet();
     recomputeEvents();
 
     for (let i = 0; i < CELLS; i++) {
       stage[i] = 0;
-      mat[i] = Math.random() * 0.18 * planet.richness; // sopa inicial
+      // Sopa inicial; las aguas arrancan algo más ricas en materiales.
+      mat[i] = Math.random() * 0.18 * planet.richness * (isWater[i] ? 1.2 : 0.9);
     }
     el.toggle.textContent = "▶ Iniciar";
     el.hint.classList.remove("hidden");
@@ -367,7 +479,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       bar("Aptitud para la vida", norm(planet.riseMult, 0.75, 1.4),
           planet.riseMult > 1.15 ? "alta" : planet.riseMult < 0.9 ? "baja" : "media") +
       bar("Bombardeo cósmico", norm(planet.bombardment, 0.4, 1.8),
-          planet.bombardment > 1.3 ? "intenso" : planet.bombardment < 0.7 ? "leve" : "moderado");
+          planet.bombardment > 1.3 ? "intenso" : planet.bombardment < 0.7 ? "leve" : "moderado") +
+      bar("Agua en superficie", planet.waterFrac,
+          planet.oceanic ? "océanos" : planet.waterFrac < 0.2 ? "árido" : "lagos");
   }
 
   function describePlanet() {
@@ -378,6 +492,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       : planet.riseMult < 0.9 ? "con condiciones poco favorables" : "con condiciones moderadas");
     parts.push(planet.bombardment > 1.3 ? "y un cielo plagado de meteoritos."
       : planet.bombardment < 0.7 ? "y un firmamento tranquilo." : "y un bombardeo cósmico moderado.");
+    parts.push(planet.oceanic ? "Es un mundo oceánico, ideal para la vida."
+      : planet.waterFrac < 0.2 ? "Es un mundo árido y rocoso." : "Tiene mares y continentes con relieve.");
     return parts.join(" ") + " Dificultad: " + planet.diff + ".";
   }
 
@@ -423,7 +539,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
         // Mantenimiento: la vida real consume material; sin él, decae.
         if (s >= 3) {
-          m -= UPKEEP * s;
+          m -= UPKEEP * upkeepFactor(s);
           if (m <= 0) { ns = s - 1; m = 0.05; }
         }
         // Colapso ecológico de las etapas altas.
@@ -434,6 +550,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
           const support = livingNeighbors / 8;
           let p = BASE_RISE[s] * planet.riseMult * (0.3 + m) * (1 + NEIGHBOR_BOOST * support);
           if (maxNeighbor > s) p *= 1.6;
+          if (isWater[i]) p *= 1.12; else p *= 0.94; // la vida prospera en el agua
           if (Math.random() < p) { ns = s + 1; m -= COST_MAT[s]; if (m < 0) m = 0; }
         }
 
@@ -489,23 +606,113 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     pulse("evt");
   }
 
+  // Choque de otro planeta: devasta un hemisferio entero pero lo deja
+  // cargado de materiales.
+  function collision() {
+    const cx = (Math.random() * SIZE) | 0, cy = (Math.random() * SIZE) | 0;
+    const r = 16 + ((Math.random() * 12) | 0), r2 = r * r;
+    for (let dy = -r; dy <= r; dy++) {
+      const ny = cy + dy;
+      if (ny < 0 || ny >= SIZE) continue;
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy > r2) continue;
+        const j = ny * SIZE + ((cx + dx + SIZE) % SIZE);
+        stage[j] = 0;
+        const d = Math.sqrt(dx * dx + dy * dy) / r;
+        mat[j] = Math.min(MAT_CAP, 0.8 + (1 - d) * 0.2);
+      }
+    }
+    marks.push({ x: cx, y: cy, r, life: 26, maxLife: 26, kind: "collision" });
+    flash("orange");
+    shake(0.045, 700);
+    logEvent("🪐 ¡Otro planeta colisiona! Un hemisferio queda devastado, pero llueven nuevos materiales.", "evt");
+  }
+
+  // Explosión de la estrella cercana (supernova): baña todo el planeta de
+  // radiación, casi un reinicio, pero lo siembra de elementos por doquier.
+  function supernova() {
+    for (let i = 0; i < CELLS; i++) {
+      if (Math.random() < 0.85) stage[i] = 0;
+      mat[i] = Math.min(MAT_CAP, 0.8 + Math.random() * 0.2);
+    }
+    flash("white");
+    shake(0.06, 1000);
+    logEvent("☀️ ¡La estrella cercana estalla en supernova! El mundo casi se reinicia, ahora repleto de elementos.", "evt");
+  }
+
+  // Cataclismo al azar (con pesos): los grandes son raros.
+  function randomCataclysm() {
+    const roll = Math.random();
+    if (roll < 0.45) strike("meteor");
+    else if (roll < 0.75) strike("volcano");
+    else if (roll < 0.93) collision();
+    else supernova();
+    pulse("evt");
+    if (!running) { updateLegend(); }
+  }
+
+  function flash(kind) {
+    const cls = kind === "white" ? "flash-white" : "flash-orange";
+    el.flash.classList.remove("flash-white", "flash-orange");
+    void el.flash.offsetWidth;
+    el.flash.classList.add(cls);
+  }
+
+  function shake(mag, durMs) {
+    shakeMag = mag;
+    shakeUntil = performance.now() + durMs;
+    shakeDur = durMs;
+  }
+
   // ---------------------------------------------------------------- Render
+  // Colores del relieve emergido (de costa a cumbre nevada).
+  const LOWLAND = [96, 84, 58], HIGHLAND = [120, 120, 126], PEAK = [226, 226, 232];
+
   function drawTexture() {
     const data = img.data;
     const dry = planet.ocean.dry, wet = planet.ocean.wet;
+    const seaInv = 1 / Math.max(0.001, 1 - seaLevel);
     for (let i = 0; i < CELLS; i++) {
       const s = stage[i];
+      const water = isWater[i];
       let r, g, b;
+
       if (s === 0) {
-        // Estéril: del color seco al húmedo según el material acumulado.
-        const t = mat[i];
-        r = dry[0] + (wet[0] - dry[0]) * t;
-        g = dry[1] + (wet[1] - dry[1]) * t;
-        b = dry[2] + (wet[2] - dry[2]) * t;
+        if (water) {
+          // Océano: del color seco al húmedo según el material (sopa),
+          // oscurecido con la profundidad.
+          const t = mat[i];
+          const depth = 0.5 + 0.5 * (elevation[i] / Math.max(0.001, seaLevel));
+          r = (dry[0] + (wet[0] - dry[0]) * t) * depth;
+          g = (dry[1] + (wet[1] - dry[1]) * t) * depth;
+          b = (dry[2] + (wet[2] - dry[2]) * t) * depth;
+        } else {
+          // Tierra: relieve de costa a cumbre, con un tinte de "sopa".
+          const e = (elevation[i] - seaLevel) * seaInv;
+          let lr, lg, lb;
+          if (e < 0.6) { const k = e / 0.6;
+            lr = LOWLAND[0] + (HIGHLAND[0] - LOWLAND[0]) * k;
+            lg = LOWLAND[1] + (HIGHLAND[1] - LOWLAND[1]) * k;
+            lb = LOWLAND[2] + (HIGHLAND[2] - LOWLAND[2]) * k;
+          } else { const k = (e - 0.6) / 0.4;
+            lr = HIGHLAND[0] + (PEAK[0] - HIGHLAND[0]) * k;
+            lg = HIGHLAND[1] + (PEAK[1] - HIGHLAND[1]) * k;
+            lb = HIGHLAND[2] + (PEAK[2] - HIGHLAND[2]) * k;
+          }
+          const mix = mat[i] * 0.3;
+          r = lr + (wet[0] - lr) * mix;
+          g = lg + (wet[1] - lg) * mix;
+          b = lb + (wet[2] - lb) * mix;
+        }
       } else {
+        // Vida: color de la etapa, con sombreado de relieve en tierra.
         const c = STAGES[s].color;
-        r = c[0]; g = c[1]; b = c[2];
+        let shade = 1;
+        if (water) shade = 0.6 + 0.45 * (elevation[i] / Math.max(0.001, seaLevel));
+        else shade = 0.72 + 0.5 * ((elevation[i] - seaLevel) * seaInv);
+        r = c[0] * shade; g = c[1] * shade; b = c[2] * shade;
       }
+
       const p = i * 4;
       data[p] = r; data[p + 1] = g; data[p + 2] = b; data[p + 3] = 255;
     }
@@ -519,7 +726,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
         const t = mk.life / mk.maxLife;
         const R = mk.r * (1.5 - 0.5 * t);
         const grad = bctx.createRadialGradient(mk.x, mk.y, 0, mk.x, mk.y, R);
-        if (mk.kind === "meteor") {
+        if (mk.kind !== "volcano") {           // meteorito o choque de planeta: fuego
           grad.addColorStop(0, `rgba(255,255,220,${0.9 * t})`);
           grad.addColorStop(0.45, `rgba(255,170,70,${0.5 * t})`);
           grad.addColorStop(1, "rgba(255,120,40,0)");
@@ -577,7 +784,14 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     if (counts[3] > 0) announce("m3", "milestone", "✶ ¡Abiogénesis! Surge la primera vida unicelular.");
     if (counts[4] > 0) announce("m4", "milestone", "✶ La vida se vuelve pluricelular.");
     if (counts[5] > 0) announce("m5", "milestone", "✶ Emergen ecosistemas de vida compleja.");
-    if (counts[3] + counts[4] + counts[5] === 0 && milestones.has("m3")) {
+    if (counts[6] > 0) announce("m6", "milestone", "✶ ¡Nace la vida inteligente! Surgen las primeras civilizaciones.");
+    if (counts[7] > 0) {
+      const fresh = !milestones.has("m7");
+      announce("m7", "milestone", "✶ ¡La civilización se vuelve interplanetaria! La vida alcanza las estrellas.");
+      if (fresh) flash("white"); // celebración del gran logro
+    }
+    const totalLife = counts[3] + counts[4] + counts[5] + counts[6] + counts[7];
+    if (totalLife === 0 && milestones.has("m3")) {
       if (!milestones.has("ext-" + years)) {
         milestones.add("ext-" + years);
         milestones.delete("m3");
@@ -633,6 +847,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
   el.meteor.addEventListener("click", () => strike("meteor"));
   el.volcano.addEventListener("click", () => strike("volcano"));
+  el.cataclysm.addEventListener("click", randomCataclysm);
 
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space") { e.preventDefault(); running ? pause() : start(); }

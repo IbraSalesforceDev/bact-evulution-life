@@ -25,6 +25,7 @@
     <main class="layout">
       <section class="stage-wrap">
         <div id="scene" class="scene"></div>
+        <div class="flash-overlay" id="flash"></div>
         <div class="overlay-hint" id="hint">Pulsa «Iniciar» para encender la vida en este mundo</div>
         <div class="view-help">🖱️ Arrastra para girar · rueda para acercar · click en el planeta para un impacto</div>
       </section>
@@ -33,6 +34,9 @@
         <div class="controls">
           <button id="toggle" class="btn btn-primary">▶ Iniciar</button>
           <button id="reset" class="btn">↻ Nuevo mundo</button>
+        </div>
+        <div class="controls">
+          <button id="cataclysm" class="btn btn-cata">💥 ¡Cataclismo aleatorio!</button>
         </div>
 
         <div class="planet-card" id="planetCard">
