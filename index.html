@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Génesis · La aparición y evolución de la vida en un planeta</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <span class="logo">🪐</span>
+        <div>
+          <h1>Génesis</h1>
+          <p class="subtitle">De los elementos químicos a la vida, sobre un planeta vivo</p>
+        </div>
+      </div>
+      <div class="clock">
+        <span class="clock-value" id="clock">0</span>
+        <span class="clock-label">millones de años</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <section class="stage-wrap">
+        <div id="scene" class="scene"></div>
+        <div class="overlay-hint" id="hint">Pulsa «Iniciar» para encender la vida en este mundo</div>
+        <div class="view-help">🖱️ Arrastra para girar · rueda para acercar · click en el planeta para un impacto</div>
+      </section>
+
+      <aside class="panel">
+        <div class="controls">
+          <button id="toggle" class="btn btn-primary">▶ Iniciar</button>
+          <button id="reset" class="btn">↻ Nuevo mundo</button>
+        </div>
+
+        <div class="planet-card" id="planetCard">
+          <div class="planet-head">
+            <span class="planet-name" id="planetName">—</span>
+            <span class="planet-diff" id="planetDiff">—</span>
+          </div>
+          <p class="planet-desc" id="planetDesc">Genera un nuevo mundo para descubrir sus condiciones.</p>
+          <ul class="planet-stats" id="planetStats"></ul>
+        </div>
+
+        <div class="control-group">
+          <label for="speed">Velocidad
+            <span class="val" id="speedVal">10 / s</span>
+          </label>
+          <input type="range" id="speed" min="1" max="60" value="10" />
+        </div>
+
+        <div class="control-group">
+          <label for="events">Frecuencia de cataclismos
+            <span class="val" id="eventsVal">Media</span>
+          </label>
+          <input type="range" id="events" min="0" max="100" value="35" />
+        </div>
+
+        <div class="controls">
+          <button id="meteor" class="btn btn-event">☄ Meteorito</button>
+          <button id="volcano" class="btn btn-event">🌋 Volcán</button>
+        </div>
+
+        <div class="fact" id="fact">
+          <div class="fact-head">💡 ¿Sabías que…?</div>
+          <p class="fact-body" id="factBody">
+            Pulsa «Iniciar» y observa cómo, a partir de simples elementos químicos,
+            puede emerger y evolucionar la vida. Irás aprendiendo sobre el camino.
+          </p>
+        </div>
+
+        <div class="stats">
+          <h2>Censo del planeta</h2>
+          <ul id="legend" class="legend"></ul>
+        </div>
+
+        <div class="log-wrap">
+          <h2>Crónica</h2>
+          <ul id="log" class="log"></ul>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="foot">
+      Cada partida genera un planeta distinto en el universo. La vida abre camino: una celda
+      con vecinas vivas prospera más fácilmente. Los cataclismos arrasan, pero siembran nuevos
+      materiales para que todo vuelva a empezar.
+    </footer>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.js",
+      "three/addons/": "./vendor/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="game.js"></script>
+</body>
+</html>
