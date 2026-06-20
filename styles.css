@@ -143,6 +143,8 @@ h1 { margin: 0; font-size: 26px; letter-spacing: .5px; }
   font-size: 13px;
 }
 .btn-cata:hover { background: linear-gradient(180deg, #91374a, #6e2a34); }
+.btn-mute { flex: 0 0 48px; font-size: 16px; }
+.btn-mute.muted { opacity: .55; }
 
 /* ---------- Destello de pantalla en grandes cataclismos ---------- */
 .flash-overlay {

@@ -17,6 +17,7 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import * as Sound from "./sound.js";
 
 (() => {
   "use strict";
@@ -180,6 +181,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     meteor: document.getElementById("meteor"),
     volcano: document.getElementById("volcano"),
     cataclysm: document.getElementById("cataclysm"),
+    mute: document.getElementById("mute"),
     flash: document.getElementById("flash"),
     legend: document.getElementById("legend"),
     log: document.getElementById("log"),
@@ -395,6 +397,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       if (!hit || !hit.uv) return;
       const x = Math.min(SIZE - 1, (hit.uv.x * SIZE) | 0);
       const y = Math.min(SIZE - 1, ((1 - hit.uv.y) * SIZE) | 0);
+      Sound.resume();
       strike("meteor", x, y);
     });
   }
@@ -604,6 +607,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
       ? `☄ Un meteorito impacta y arrasa una región (radio ${r}).`
       : `🌋 Una erupción volcánica devasta y fertiliza el terreno (radio ${r}).`, "evt");
     pulse("evt");
+    if (kind === "meteor") Sound.meteor(); else Sound.volcano();
   }
 
   // Choque de otro planeta: devasta un hemisferio entero pero lo deja
@@ -625,6 +629,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     marks.push({ x: cx, y: cy, r, life: 26, maxLife: 26, kind: "collision" });
     flash("orange");
     shake(0.045, 700);
+    Sound.collision();
     logEvent("🪐 ¡Otro planeta colisiona! Un hemisferio queda devastado, pero llueven nuevos materiales.", "evt");
   }
 
@@ -637,6 +642,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     }
     flash("white");
     shake(0.06, 1000);
+    Sound.supernova();
     logEvent("☀️ ¡La estrella cercana estalla en supernova! El mundo casi se reinicia, ahora repleto de elementos.", "evt");
   }
 
@@ -777,6 +783,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
         logEvent(text, cls);
         if (FACT_BY_KEY[key]) showFact(FACT_BY_KEY[key]);
         pulse(cls === "evt" ? "evt" : "life");
+        if (cls === "milestone") Sound.milestone(Number(key.slice(1)) || 1);
       }
     };
     if (counts[1] > 0) announce("m1", "milestone", "✶ Aparecen los primeros elementos esenciales (CHON).");
@@ -830,8 +837,20 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     el.toggle.textContent = "▶ Reanudar";
   }
 
-  el.toggle.addEventListener("click", () => running ? pause() : start());
-  el.reset.addEventListener("click", reset);
+  el.toggle.addEventListener("click", () => { Sound.resume(); Sound.click(); running ? pause() : start(); });
+  el.reset.addEventListener("click", () => { Sound.resume(); Sound.click(); reset(); });
+
+  // Botón de silencio (recuerda la preferencia entre partidas).
+  function applyMute(m) {
+    Sound.setMuted(m);
+    el.mute.textContent = m ? "🔇" : "🔊";
+    el.mute.classList.toggle("muted", m);
+    try { localStorage.setItem("genesis-muted", m ? "1" : "0"); } catch (e) {}
+  }
+  el.mute.addEventListener("click", () => { Sound.resume(); applyMute(!Sound.isMuted()); });
+  let savedMute = false;
+  try { savedMute = localStorage.getItem("genesis-muted") === "1"; } catch (e) {}
+  applyMute(savedMute);
 
   el.speed.addEventListener("input", () => {
     speed = +el.speed.value;
@@ -845,9 +864,9 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     recomputeEvents();
   });
 
-  el.meteor.addEventListener("click", () => strike("meteor"));
-  el.volcano.addEventListener("click", () => strike("volcano"));
-  el.cataclysm.addEventListener("click", randomCataclysm);
+  el.meteor.addEventListener("click", () => { Sound.resume(); strike("meteor"); });
+  el.volcano.addEventListener("click", () => { Sound.resume(); strike("volcano"); });
+  el.cataclysm.addEventListener("click", () => { Sound.resume(); randomCataclysm(); });
 
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space") { e.preventDefault(); running ? pause() : start(); }
