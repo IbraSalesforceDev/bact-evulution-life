@@ -10,7 +10,7 @@
 let ctx = null;
 let master = null;
 let muted = false;
-const VOL = 0.35;
+const VOL = 0.5;
 
 function ac() {
   if (!ctx) {
@@ -25,6 +25,27 @@ function ac() {
 export function resume() {
   const c = ac();
   if (c.state === "suspended") c.resume();
+}
+
+// Desbloqueo de audio para móviles (iOS/iPad): reanuda el contexto y
+// reproduce un sonido inaudible para que el navegador habilite el audio.
+export function unlock() {
+  const c = ac();
+  if (c.state === "suspended") c.resume();
+  const b = c.createBuffer(1, 1, c.sampleRate);
+  const s = c.createBufferSource();
+  s.buffer = b; s.connect(master); s.start(0);
+}
+
+// Tono ascendente de arranque: confirmación inmediata de que hay sonido.
+export function startTone() {
+  if (muted) return;
+  const c = ac(), t = c.currentTime;
+  const o = c.createOscillator(); o.type = "triangle";
+  o.frequency.setValueAtTime(220, t);
+  o.frequency.exponentialRampToValueAtTime(660, t + 0.3);
+  const g = c.createGain(); shape(g, t, 0.4, 0.02, 0.4);
+  o.connect(g).connect(master); o.start(t); o.stop(t + 0.45);
 }
 
 export function setMuted(m) {
