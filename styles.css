@@ -78,15 +78,25 @@ h1 { margin: 0; font-size: 26px; letter-spacing: .5px; }
   display: flex;
   justify-content: center;
 }
-#board {
+.scene {
   width: 100%;
   max-width: 600px;
   aspect-ratio: 1 / 1;
-  height: auto;
-  image-rendering: pixelated;
-  border-radius: 8px;
-  background: #060912;
-  cursor: crosshair;
+  border-radius: 10px;
+  overflow: hidden;
+  background: radial-gradient(circle at 50% 45%, #0a1024 0%, #03040a 70%);
+  cursor: grab;
+}
+.scene:active { cursor: grabbing; }
+.scene canvas { display: block; width: 100% !important; height: 100% !important; }
+
+.view-help {
+  position: absolute;
+  left: 0; right: 0; bottom: 16px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
 }
 .overlay-hint {
   position: absolute;
@@ -137,6 +147,34 @@ h1 { margin: 0; font-size: 26px; letter-spacing: .5px; }
 }
 .control-group .val { color: var(--text); font-weight: 600; }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+/* ---------- Tarjeta del planeta ---------- */
+.planet-card {
+  background: linear-gradient(180deg, #101a30, #0c1424);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+.planet-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.planet-name { font-size: 15px; font-weight: 700; }
+.planet-diff {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.diff-easy    { background: rgba(95,211,95,.18);  color: #7fe07f; }
+.diff-ok      { background: rgba(74,163,255,.18); color: #7cc0ff; }
+.diff-hard    { background: rgba(244,167,66,.18); color: #f4b25a; }
+.diff-hostile { background: rgba(244,104,58,.20); color: #ff8a64; }
+.planet-desc { margin: 8px 0 10px; font-size: 12px; line-height: 1.5; color: var(--muted); }
+.planet-stats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; }
+.planet-stats li { display: grid; grid-template-columns: 1fr 70px auto; align-items: center; gap: 8px; font-size: 11px; }
+.ps-label { color: var(--text); }
+.ps-bar { height: 6px; background: #1c2640; border-radius: 4px; overflow: hidden; }
+.ps-fill { display: block; height: 100%; background: linear-gradient(90deg, #4aa3ff, #5fd35f); }
+.ps-hint { color: var(--muted); text-align: right; }
 
 /* ---------- Tarjeta de conocimiento ---------- */
 .fact {

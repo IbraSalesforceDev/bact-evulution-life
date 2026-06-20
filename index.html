@@ -3,17 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Génesis · La aparición y evolución de la vida</title>
+  <title>Génesis · La aparición y evolución de la vida en un planeta</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
     <header class="topbar">
       <div class="brand">
-        <span class="logo">🧬</span>
+        <span class="logo">🪐</span>
         <div>
           <h1>Génesis</h1>
-          <p class="subtitle">De los elementos químicos a la vida compleja</p>
+          <p class="subtitle">De los elementos químicos a la vida, sobre un planeta vivo</p>
         </div>
       </div>
       <div class="clock">
@@ -24,14 +24,24 @@
 
     <main class="layout">
       <section class="stage-wrap">
-        <canvas id="board" width="600" height="600" aria-label="Tablero de simulación"></canvas>
-        <div class="overlay-hint" id="hint">Pulsa «Iniciar» para encender la sopa primordial</div>
+        <div id="scene" class="scene"></div>
+        <div class="overlay-hint" id="hint">Pulsa «Iniciar» para encender la vida en este mundo</div>
+        <div class="view-help">🖱️ Arrastra para girar · rueda para acercar · click en el planeta para un impacto</div>
       </section>
 
       <aside class="panel">
         <div class="controls">
           <button id="toggle" class="btn btn-primary">▶ Iniciar</button>
-          <button id="reset" class="btn">↻ Reiniciar</button>
+          <button id="reset" class="btn">↻ Nuevo mundo</button>
+        </div>
+
+        <div class="planet-card" id="planetCard">
+          <div class="planet-head">
+            <span class="planet-name" id="planetName">—</span>
+            <span class="planet-diff" id="planetDiff">—</span>
+          </div>
+          <p class="planet-desc" id="planetDesc">Genera un nuevo mundo para descubrir sus condiciones.</p>
+          <ul class="planet-stats" id="planetStats"></ul>
         </div>
 
         <div class="control-group">
@@ -74,11 +84,20 @@
     </main>
 
     <footer class="foot">
-      La vida abre camino: una celda con vecinos vivos prospera más fácilmente. Los cataclismos
-      arrasan, pero siembran nuevos materiales para que todo vuelva a empezar.
+      Cada partida genera un planeta distinto en el universo. La vida abre camino: una celda
+      con vecinas vivas prospera más fácilmente. Los cataclismos arrasan, pero siembran nuevos
+      materiales para que todo vuelva a empezar.
     </footer>
   </div>
 
-  <script src="game.js"></script>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "./vendor/three.module.js",
+      "three/addons/": "./vendor/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="game.js"></script>
 </body>
 </html>

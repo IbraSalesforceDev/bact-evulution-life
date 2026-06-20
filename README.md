@@ -3,22 +3,32 @@
 Un juego/simulación tipo **autómata celular** sobre cómo, a partir de elementos
 químicos, surgen moléculas, y de ahí la vida unicelular, pluricelular y compleja.
 
-El tablero es una rejilla de **100×100 celdas**. Al iniciar la partida, cada
-celda tiene pequeñas probabilidades de combinar elementos esenciales (CHON) y, con
-el paso de los millones de años, ir ascendiendo de etapa. **La vida abre camino**:
-una celda con vecinas vivas evoluciona mucho más fácilmente, así que la vida se
-expande en oleadas. Eventos como **meteoritos y volcanes** arrasan regiones
-enteras, pero las siembran de nuevos materiales que facilitan un nuevo comienzo.
+La superficie del planeta es una rejilla de **100×100 celdas** proyectada sobre
+una **esfera 3D** que puedes **girar** (arrastrando) y **acercar/alejar** (rueda
+del ratón). Al iniciar la partida, cada celda tiene pequeñas probabilidades de
+combinar elementos esenciales (CHON) y, con el paso de los millones de años, ir
+ascendiendo de etapa. **La vida abre camino**: una celda con vecinas vivas
+evoluciona mucho más fácilmente, así que la vida se expande en oleadas. Eventos
+como **meteoritos y volcanes** arrasan regiones enteras, pero las siembran de
+nuevos materiales que facilitan un nuevo comienzo.
+
+Cada partida genera un **planeta distinto** en el universo, con condiciones
+aleatorias (abundancia de elementos, aptitud para la vida y bombardeo cósmico)
+que lo hacen más fácil o más difícil. El 3D usa [Three.js](https://threejs.org),
+incluido en `vendor/` para que funcione sin conexión.
 
 ## Cómo jugar
 
-Abre `index.html` en cualquier navegador moderno. No requiere instalación ni build.
+Al usar módulos de JavaScript, hay que servirlo por HTTP (no vale abrir el
+archivo con doble clic). No requiere instalación ni build:
 
 ```bash
-# opcional, para servirlo localmente
 python3 -m http.server 8000
 # y abre http://localhost:8000
 ```
+
+Para compartirlo con más gente, lo más cómodo es desplegarlo gratis en un
+servicio estático (Vercel, Netlify, GitHub Pages…) y pasar el enlace.
 
 ### Controles
 - **▶ Iniciar / ⏸ Pausar** — arranca o detiene la evolución (también con la barra espaciadora).
