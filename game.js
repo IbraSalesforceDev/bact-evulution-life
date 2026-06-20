@@ -831,6 +831,7 @@ import * as Sound from "./sound.js";
     lastTime = 0;
     el.toggle.textContent = "⏸ Pausar";
     el.hint.classList.add("hidden");
+    Sound.startTone();
   }
   function pause() {
     running = false;
@@ -871,6 +872,12 @@ import * as Sound from "./sound.js";
   window.addEventListener("keydown", (e) => {
     if (e.code === "Space") { e.preventDefault(); running ? pause() : start(); }
   });
+
+  // Desbloqueo del audio en el primer gesto del usuario (clave en móviles).
+  const unlockAudio = () => Sound.unlock();
+  window.addEventListener("pointerdown", unlockAudio, { once: true });
+  window.addEventListener("keydown", unlockAudio, { once: true });
+  window.addEventListener("touchstart", unlockAudio, { once: true });
 
   // Arranque.
   initScene();
